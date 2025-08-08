@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Audio Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .left-panel {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+        }
+
+        .right-panel {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 600px;
+        }
+
+        .controls-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .recording-controls, .parameter-controls {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #e9ecef;
+        }
+
+        .musetalk-placeholder {
+            text-align: center;
+            color: #666;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .recording-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .btn-record {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-record:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        .btn-record:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-stop {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-stop:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-save {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-save:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .btn-save:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-webrtc {
+            background: #6f42c1;
+            color: white;
+        }
+
+        .btn-webrtc:hover {
+            background: #5a32a3;
+            transform: translateY(-2px);
+        }
+
+        .recording-status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .status-idle {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .status-recording {
+            background: #f8d7da;
+            color: #721c24;
+            animation: pulse 2s infinite;
+        }
+
+        .status-webrtc {
+            background: #d1ecf1;
+            color: #0c5460;
+            animation: pulse 2s infinite;
+        }
+
+        .status-processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .parameter-group {
+            margin-bottom: 20px;
+        }
+
+        .parameter-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .parameter-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .parameter-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .parameter-range {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .range-slider {
+            flex: 1;
+        }
+
+        .range-value {
+            min-width: 60px;
+            text-align: center;
+            font-weight: 600;
+            color: #007bff;
+        }
+
+        .audio-visualizer {
+            width: 100%;
+            height: 100px;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .visualizer-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .recording-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .recording-time {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .recording-size {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .connection-status {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .connection-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .connection-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .message-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .webrtc-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #6f42c1;
+        }
+
+        .webrtc-info h3 {
+            color: #6f42c1;
+            margin-bottom: 10px;
+        }
+
+        .webrtc-info p {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .recording-mode-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .recording-mode-info p {
+            color: #333;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .recording-mode-info p:last-child {
+            margin-bottom: 0;
+        }
+
+        @media (max-width: 768px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .controls-section {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎤 WebRTC Audio Recorder</h1>
+            <p>Real-time audio recording with WebRTC and customizable parameters</p>
+        </div>
+
+                <div class="main-layout">
+            <!-- Left Panel - Audio Recorder -->
+            <div class="left-panel">
+                <div class="controls-section">
+                    <!-- Recording Controls -->
+                    <div class="recording-controls">
+                        <h2 class="section-title">🎙️ Recording Controls</h2>
+                        
+                        <div class="connection-status connection-disconnected" id="connectionStatus">
+                            WebSocket: Disconnected
+                        </div>
+
+                        <div class="recording-status status-idle" id="recordingStatus">
+                            Ready to record
+                        </div>
+
+                        <div class="recording-mode-info">
+                            <p><strong>Record:</strong> Traditional recording - saves audio after stopping</p>
+                            <p><strong>WebRTC:</strong> Real-time streaming - audio is streamed for later processing with FPS/batch size parameters</p>
+                        </div>
+
+                        <div class="recording-buttons">
+                            <button class="btn btn-record" id="recordBtn" title="Traditional recording using MediaRecorder API">Record</button>
+                            <button class="btn btn-webrtc" id="webrtcBtn" title="Real-time WebRTC streaming for later processing">WebRTC</button>
+                            <button class="btn btn-stop" id="stopBtn" disabled>Stop</button>
+                            <button class="btn btn-save" id="saveBtn" disabled>Save</button>
+                        </div>
+
+                        <div class="audio-visualizer">
+                            <canvas class="visualizer-canvas" id="visualizer"></canvas>
+                        </div>
+
+                        <div class="recording-info" id="recordingInfo" style="display: none;">
+                            <div class="recording-time" id="recordingTime">00:00</div>
+                            <div class="recording-size" id="recordingSize">0 KB</div>
+                        </div>
+
+                        <div class="webrtc-info" id="webrtcInfo" style="display: none;">
+                            <h3>WebRTC Connection</h3>
+                            <p id="webrtcStatus">Initializing...</p>
+                            <p id="webrtcStats">No data</p>
+                        </div>
+                    </div>
+
+                    <!-- Parameter Controls -->
+                    <div class="parameter-controls">
+                        <h2 class="section-title">⚙️ Processing Parameters</h2>
+                        
+                        <div class="parameter-group">
+                            <label class="parameter-label" for="fps">FPS (Frames Per Second)</label>
+                            <div class="parameter-range">
+                                <input type="range" id="fps" class="range-slider" min="1" max="60" value="30">
+                                <span class="range-value" id="fpsValue">30</span>
+                            </div>
+                            <small style="color: #666; font-size: 0.8rem;">For later processing stage</small>
+                        </div>
+
+                        <div class="parameter-group">
+                            <label class="parameter-label" for="batchSize">Batch Size</label>
+                            <div class="parameter-range">
+                                <input type="range" id="batchSize" class="range-slider" min="16" max="256" value="64" step="16">
+                                <span class="range-value" id="batchSizeValue">64</span>
+                            </div>
+                            <small style="color: #666; font-size: 0.8rem;">For later processing stage</small>
+                        </div>
+
+                        <button class="btn btn-save" id="updateParamsBtn" style="width: 100%; margin-top: 20px;">
+                            Update Processing Parameters
+                        </button>
+                    </div>
+                </div>
+
+                <div id="messageContainer"></div>
+            </div>
+
+            <!-- Right Panel - Musetalk Stream -->
+            <div class="right-panel">
+                <div class="musetalk-placeholder">
+                    Musetalk Stream Here
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class WebRTCAudioRecorder {
+            constructor() {
+                this.mediaRecorder = null;
+                this.audioChunks = [];
+                this.isRecording = false;
+                this.isWebRTC = false;
+                this.startTime = 0;
+                this.recordingInterval = null;
+                this.audioContext = null;
+                this.analyser = null;
+                this.microphone = null;
+                this.visualizerCanvas = document.getElementById('visualizer');
+                this.visualizerCtx = this.visualizerCanvas.getContext('2d');
+                
+                // WebRTC properties
+                this.peerConnection = null;
+                this.localStream = null;
+                this.sessionId = this.generateSessionId();
+                this.websocket = null;
+                this.webrtcStats = {
+                    packetsReceived: 0,
+                    bytesReceived: 0,
+                    framesProcessed: 0
+                };
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.setupVisualizer();
+                this.connectWebSocket();
+            }
+
+            generateSessionId() {
+                return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            initializeElements() {
+                this.recordBtn = document.getElementById('recordBtn');
+                this.webrtcBtn = document.getElementById('webrtcBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.saveBtn = document.getElementById('saveBtn');
+                this.recordingStatus = document.getElementById('recordingStatus');
+                this.recordingInfo = document.getElementById('recordingInfo');
+                this.recordingTime = document.getElementById('recordingTime');
+                this.recordingSize = document.getElementById('recordingSize');
+                this.messageContainer = document.getElementById('messageContainer');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.webrtcInfo = document.getElementById('webrtcInfo');
+                this.webrtcStatus = document.getElementById('webrtcStatus');
+                this.webrtcStats = document.getElementById('webrtcStats');
+                
+                // Parameter elements
+                this.fpsSlider = document.getElementById('fps');
+                this.fpsValue = document.getElementById('fpsValue');
+                this.batchSizeSlider = document.getElementById('batchSize');
+                this.batchSizeValue = document.getElementById('batchSizeValue');
+                this.updateParamsBtn = document.getElementById('updateParamsBtn');
+            }
+
+            setupEventListeners() {
+                this.recordBtn.addEventListener('click', () => this.startRecording());
+                this.webrtcBtn.addEventListener('click', () => this.startWebRTC());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.saveBtn.addEventListener('click', () => this.saveRecording());
+                this.updateParamsBtn.addEventListener('click', () => this.updateParameters());
+
+                // Parameter range listeners
+                this.fpsSlider.addEventListener('input', (e) => {
+                    this.fpsValue.textContent = e.target.value;
+                });
+
+                this.batchSizeSlider.addEventListener('input', (e) => {
+                    this.batchSizeValue.textContent = e.target.value;
+                });
+            }
+
+            setupVisualizer() {
+                this.visualizerCanvas.width = this.visualizerCanvas.offsetWidth;
+                this.visualizerCanvas.height = this.visualizerCanvas.offsetHeight;
+            }
+
+            async connectWebSocket() {
+                try {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws`;
+                    
+                    this.websocket = new WebSocket(wsUrl);
+                    
+                    this.websocket.onopen = () => {
+                        this.connectionStatus.textContent = 'WebSocket: Connected';
+                        this.connectionStatus.className = 'connection-status connection-connected';
+                        
+                        // Send initialization message
+                        this.websocket.send(JSON.stringify({
+                            type: 'init',
+                            session_id: this.sessionId
+                        }));
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleWebSocketMessage(data);
+                    };
+                    
+                    this.websocket.onclose = () => {
+                        this.connectionStatus.textContent = 'WebSocket: Disconnected';
+                        this.connectionStatus.className = 'connection-status connection-disconnected';
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.showMessage('WebSocket connection error', 'error');
+                    };
+                    
+                } catch (error) {
+                    console.error('Error connecting to WebSocket:', error);
+                    this.showMessage('Failed to connect to WebSocket', 'error');
+                }
+            }
+
+            handleWebSocketMessage(data) {
+                switch (data.type) {
+                    case 'init_ack':
+                        this.showMessage('WebSocket connection established', 'success');
+                        break;
+                    case 'audio_processed':
+                        this.updateWebRTCStats(data.processed);
+                        break;
+                    case 'params_updated':
+                        this.showMessage('Parameters updated via WebSocket', 'info');
+                        break;
+                    case 'pong':
+                        // Handle ping-pong for connection health
+                        break;
+                }
+            }
+
+            async startRecording() {
+                if (this.isWebRTC) {
+                    this.showMessage('Please stop WebRTC recording first', 'error');
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            sampleRate: 44100,  // Fixed sample rate
+                            channelCount: 1,    // Fixed mono channel
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        } 
+                    });
+
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.microphone = this.audioContext.createMediaStreamSource(stream);
+                    
+                    this.analyser.fftSize = 256;
+                    this.microphone.connect(this.analyser);
+
+                    this.mediaRecorder = new MediaRecorder(stream);
+                    this.audioChunks = [];
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        this.audioChunks.push(event.data);
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        this.isRecording = false;
+                        this.updateUI();
+                        this.stopVisualizer();
+                    };
+
+                    this.mediaRecorder.start();
+                    this.isRecording = true;
+                    this.startTime = Date.now();
+                    this.updateUI();
+                    this.startVisualizer();
+                    this.startTimer();
+
+                    this.showMessage('Recording started successfully!', 'success');
+
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    this.showMessage('Error starting recording: ' + error.message, 'error');
+                }
+            }
+
+            async startWebRTC() {
+                if (this.isRecording) {
+                    this.showMessage('Please stop current recording first', 'error');
+                    return;
+                }
+
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: 44100,  // Fixed sample rate
+                            channelCount: 1,    // Fixed mono channel
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+
+                    // Create RTCPeerConnection
+                    this.peerConnection = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' }
+                        ]
+                    });
+
+                    // Add local stream
+                    this.localStream.getTracks().forEach(track => {
+                        this.peerConnection.addTrack(track, this.localStream);
+                    });
+
+                    // Handle incoming audio data
+                    this.peerConnection.ontrack = (event) => {
+                        this.handleIncomingAudio(event);
+                    };
+
+                    // Create offer
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+
+                    // Send offer to server
+                    const response = await fetch('/webrtc/offer', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            offer: offer,
+                            session_id: this.sessionId
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.isWebRTC = true;
+                        this.isRecording = true;
+                        this.startTime = Date.now();
+                        this.updateUI();
+                        this.startTimer();
+                        this.webrtcInfo.style.display = 'block';
+                        this.webrtcStatus.textContent = 'WebRTC: Connected';
+                        
+                        this.showMessage('WebRTC recording started!', 'success');
+                    } else {
+                        this.showMessage('Error starting WebRTC: ' + result.message, 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Error starting WebRTC:', error);
+                    this.showMessage('Error starting WebRTC: ' + error.message, 'error');
+                }
+            }
+
+            handleIncomingAudio(event) {
+                // Process incoming audio data with current parameters
+                const audioData = event.streams[0];
+                
+                // Send audio data to server via WebSocket
+                if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                    this.websocket.send(JSON.stringify({
+                        type: 'audio_data',
+                        audio_data: 'audio_data_placeholder', // In real implementation, encode actual audio
+                        session_id: this.sessionId,
+                        timestamp: Date.now()
+                    }));
+                }
+            }
+
+            updateWebRTCStats(processed) {
+                this.webrtcStats.packetsReceived++;
+                this.webrtcStats.framesProcessed = processed.fps_applied;
+                
+                document.getElementById('webrtcStats').textContent = 
+                    `Packets: ${this.webrtcStats.packetsReceived} | FPS: ${processed.fps_applied} | Batch: ${processed.batch_size_applied}`;
+            }
+
+            stopRecording() {
+                if (this.mediaRecorder && this.isRecording && !this.isWebRTC) {
+                    this.mediaRecorder.stop();
+                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                    
+                    if (this.audioContext) {
+                        this.audioContext.close();
+                    }
+                    
+                    clearInterval(this.recordingInterval);
+                    this.showMessage('Recording stopped!', 'success');
+                } else if (this.isWebRTC) {
+                    // Stop WebRTC recording
+                    if (this.peerConnection) {
+                        this.peerConnection.close();
+                        this.peerConnection = null;
+                    }
+                    
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => track.stop());
+                        this.localStream = null;
+                    }
+                    
+                    this.isWebRTC = false;
+                    this.isRecording = false;
+                    this.updateUI();
+                    this.webrtcInfo.style.display = 'none';
+                    clearInterval(this.recordingInterval);
+                    
+                    this.showMessage('WebRTC recording stopped!', 'success');
+                }
+            }
+
+            async saveRecording() {
+                if (this.audioChunks.length === 0 && !this.isWebRTC) {
+                    this.showMessage('No recording to save!', 'error');
+                    return;
+                }
+
+                try {
+                    let audioBlob;
+                    if (this.isWebRTC) {
+                        // For WebRTC, we might not have audioChunks, so create a placeholder
+                        audioBlob = new Blob(['webrtc_audio_data'], { type: 'audio/wav' });
+                    } else {
+                        audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    }
+                    
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const base64Audio = this.arrayBufferToBase64(arrayBuffer);
+
+                    const recordingData = {
+                        audio_data: base64Audio,
+                        duration: (Date.now() - this.startTime) / 1000,
+                        session_id: this.sessionId,
+                        recording_type: this.isWebRTC ? 'webrtc' : 'mediarecorder'
+                    };
+
+                    const response = await fetch('/save_recording', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(recordingData)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.showMessage(`Recording saved as ${result.filename}`, 'success');
+                        this.audioChunks = [];
+                        this.updateUI();
+                    } else {
+                        this.showMessage('Error saving recording: ' + result.message, 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Error saving recording:', error);
+                    this.showMessage('Error saving recording: ' + error.message, 'error');
+                }
+            }
+
+            async updateParameters() {
+                const params = {
+                    fps: parseInt(this.fpsSlider.value),
+                    batch_size: parseInt(this.batchSizeSlider.value),
+                    sample_rate: 44100,  // Fixed sample rate
+                    channels: 1          // Fixed mono channel
+                };
+
+                try {
+                    // Update via HTTP
+                    const response = await fetch('/update_params', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(params)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.status === 'success') {
+                        this.showMessage('Parameters updated successfully!', 'success');
+                        
+                        // Also update via WebSocket if connected
+                        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                            this.websocket.send(JSON.stringify({
+                                type: 'update_params',
+                                params: params
+                            }));
+                        }
+                    } else {
+                        this.showMessage('Error updating parameters: ' + result.message, 'error');
+                    }
+
+                } catch (error) {
+                    console.error('Error updating parameters:', error);
+                    this.showMessage('Error updating parameters: ' + error.message, 'error');
+                }
+            }
+
+            updateUI() {
+                this.recordBtn.disabled = this.isRecording;
+                this.webrtcBtn.disabled = this.isRecording;
+                this.stopBtn.disabled = !this.isRecording;
+                this.saveBtn.disabled = this.audioChunks.length === 0 && !this.isWebRTC;
+
+                if (this.isRecording) {
+                    if (this.isWebRTC) {
+                        this.recordingStatus.textContent = 'WebRTC Recording...';
+                        this.recordingStatus.className = 'recording-status status-webrtc';
+                    } else {
+                        this.recordingStatus.textContent = 'Recording...';
+                        this.recordingStatus.className = 'recording-status status-recording';
+                    }
+                    this.recordingInfo.style.display = 'block';
+                } else {
+                    this.recordingStatus.textContent = 'Ready to record';
+                    this.recordingStatus.className = 'recording-status status-idle';
+                    this.recordingInfo.style.display = 'none';
+                }
+            }
+
+            startTimer() {
+                this.recordingInterval = setInterval(() => {
+                    const elapsed = Date.now() - this.startTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    this.recordingTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    // Update recording size
+                    if (!this.isWebRTC) {
+                        const totalSize = this.audioChunks.reduce((total, chunk) => total + chunk.size, 0);
+                        this.recordingSize.textContent = `${(totalSize / 1024).toFixed(1)} KB`;
+                    } else {
+                        this.recordingSize.textContent = 'WebRTC Stream';
+                    }
+                }, 1000);
+            }
+
+            startVisualizer() {
+                if (!this.analyser) return;
+                
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const draw = () => {
+                    if (!this.isRecording) return;
+
+                    requestAnimationFrame(draw);
+                    this.analyser.getByteFrequencyData(dataArray);
+
+                    this.visualizerCtx.fillStyle = 'rgb(248, 249, 250)';
+                    this.visualizerCtx.fillRect(0, 0, this.visualizerCanvas.width, this.visualizerCanvas.height);
+
+                    const barWidth = (this.visualizerCanvas.width / bufferLength) * 2.5;
+                    let barHeight;
+                    let x = 0;
+
+                    for (let i = 0; i < bufferLength; i++) {
+                        barHeight = dataArray[i] / 2;
+                        this.visualizerCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+                        this.visualizerCtx.fillRect(x, this.visualizerCanvas.height - barHeight, barWidth, barHeight);
+                        x += barWidth + 1;
+                    }
+                };
+
+                draw();
+            }
+
+            stopVisualizer() {
+                this.visualizerCtx.fillStyle = 'rgb(248, 249, 250)';
+                this.visualizerCtx.fillRect(0, 0, this.visualizerCanvas.width, this.visualizerCanvas.height);
+            }
+
+            arrayBufferToBase64(buffer) {
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                const len = bytes.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return window.btoa(binary);
+            }
+
+            showMessage(message, type) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message message-${type}`;
+                messageDiv.textContent = message;
+                
+                this.messageContainer.appendChild(messageDiv);
+                
+                setTimeout(() => {
+                    messageDiv.remove();
+                }, 5000);
+            }
+        }
+
+        // Initialize the audio recorder when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new WebRTCAudioRecorder();
+        });
+    </script>
+</body>
+</html>
