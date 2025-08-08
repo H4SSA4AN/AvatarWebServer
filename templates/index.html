@@ -88,6 +88,72 @@
             font-weight: 600;
         }
 
+        .server-config {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #e9ecef;
+            margin-bottom: 30px;
+        }
+
+        .server-input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .server-input {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .server-input label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .server-input input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .server-input input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .server-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .btn-connect {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-connect:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-disconnect {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-disconnect:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
         .section-title {
             font-size: 1.3rem;
             font-weight: 600;
@@ -469,6 +535,31 @@
                     </div>
                 </div>
 
+                <!-- Server Configuration -->
+                <div class="server-config">
+                    <h2 class="section-title">🔗 Server Configuration</h2>
+                    
+                                         <div class="server-input-group">
+                         <div class="server-input">
+                             <label for="server1Url">Mini Omni 2 URL</label>
+                             <input type="url" id="server1Url" placeholder="ws://localhost:8080" value="ws://localhost:8080">
+                         </div>
+                     </div>
+                     
+                     <div class="server-input-group">
+                         <div class="server-input">
+                             <label for="server2Url">Musetalk URL</label>
+                             <input type="url" id="server2Url" placeholder="ws://localhost:8081" value="ws://localhost:8081">
+                         </div>
+                     </div>
+                    
+                    <div class="server-actions">
+                        <button class="btn btn-connect" id="connectServer1Btn">Connect Mini Omni 2</button>
+                        <button class="btn btn-connect" id="connectServer2Btn">Connect Musetalk</button>
+                        <button class="btn btn-disconnect" id="disconnectAllBtn">Disconnect All</button>
+                    </div>
+                </div>
+
                 <div id="messageContainer"></div>
             </div>
 
@@ -496,16 +587,20 @@
                 this.visualizerCanvas = document.getElementById('visualizer');
                 this.visualizerCtx = this.visualizerCanvas.getContext('2d');
                 
-                // WebRTC properties
-                this.peerConnection = null;
-                this.localStream = null;
-                this.sessionId = this.generateSessionId();
-                this.websocket = null;
-                this.webrtcStats = {
-                    packetsReceived: 0,
-                    bytesReceived: 0,
-                    framesProcessed: 0
-                };
+                                 // WebRTC properties
+                 this.peerConnection = null;
+                 this.localStream = null;
+                 this.sessionId = this.generateSessionId();
+                 this.websocket = null;
+                 this.webrtcStats = {
+                     packetsReceived: 0,
+                     bytesReceived: 0,
+                     framesProcessed: 0
+                 };
+                 
+                 // Server WebSocket connections
+                 this.miniOmniWebSocket = null;
+                 this.musetalkWebSocket = null;
                 
                 this.initializeElements();
                 this.setupEventListeners();
@@ -538,6 +633,13 @@
                 this.batchSizeSlider = document.getElementById('batchSize');
                 this.batchSizeValue = document.getElementById('batchSizeValue');
                 this.updateParamsBtn = document.getElementById('updateParamsBtn');
+                
+                                 // Server configuration elements
+                 this.server1Url = document.getElementById('server1Url');
+                 this.server2Url = document.getElementById('server2Url');
+                 this.connectServer1Btn = document.getElementById('connectServer1Btn');
+                 this.connectServer2Btn = document.getElementById('connectServer2Btn');
+                 this.disconnectAllBtn = document.getElementById('disconnectAllBtn');
             }
 
             setupEventListeners() {
@@ -546,6 +648,11 @@
                 this.stopBtn.addEventListener('click', () => this.stopRecording());
                 this.saveBtn.addEventListener('click', () => this.saveRecording());
                 this.updateParamsBtn.addEventListener('click', () => this.updateParameters());
+
+                // Server connection listeners
+                this.connectServer1Btn.addEventListener('click', () => this.connectToServer(1));
+                this.connectServer2Btn.addEventListener('click', () => this.connectToServer(2));
+                this.disconnectAllBtn.addEventListener('click', () => this.disconnectAllServers());
 
                 // Parameter range listeners
                 this.fpsSlider.addEventListener('input', (e) => {
@@ -765,38 +872,45 @@
                     `Packets: ${this.webrtcStats.packetsReceived} | FPS: ${processed.fps_applied} | Batch: ${processed.batch_size_applied}`;
             }
 
-            stopRecording() {
-                if (this.mediaRecorder && this.isRecording && !this.isWebRTC) {
-                    this.mediaRecorder.stop();
-                    this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
-                    
-                    if (this.audioContext) {
-                        this.audioContext.close();
-                    }
-                    
-                    clearInterval(this.recordingInterval);
-                    this.showMessage('Recording stopped!', 'success');
-                } else if (this.isWebRTC) {
-                    // Stop WebRTC recording
-                    if (this.peerConnection) {
-                        this.peerConnection.close();
-                        this.peerConnection = null;
-                    }
-                    
-                    if (this.localStream) {
-                        this.localStream.getTracks().forEach(track => track.stop());
-                        this.localStream = null;
-                    }
-                    
-                    this.isWebRTC = false;
-                    this.isRecording = false;
-                    this.updateUI();
-                    this.webrtcInfo.style.display = 'none';
-                    clearInterval(this.recordingInterval);
-                    
-                    this.showMessage('WebRTC recording stopped!', 'success');
-                }
-            }
+                         async stopRecording() {
+                 if (this.mediaRecorder && this.isRecording && !this.isWebRTC) {
+                     this.mediaRecorder.stop();
+                     this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                     
+                     if (this.audioContext) {
+                         this.audioContext.close();
+                     }
+                     
+                     clearInterval(this.recordingInterval);
+                     this.showMessage('Recording stopped!', 'success');
+                     
+                     // Transmit audio to Mini Omni 2 if connected
+                     await this.transmitAudioToMiniOmni2();
+                     
+                 } else if (this.isWebRTC) {
+                     // Stop WebRTC recording
+                     if (this.peerConnection) {
+                         this.peerConnection.close();
+                         this.peerConnection = null;
+                     }
+                     
+                     if (this.localStream) {
+                         this.localStream.getTracks().forEach(track => track.stop());
+                         this.localStream = null;
+                     }
+                     
+                     this.isWebRTC = false;
+                     this.isRecording = false;
+                     this.updateUI();
+                     this.webrtcInfo.style.display = 'none';
+                     clearInterval(this.recordingInterval);
+                     
+                     this.showMessage('WebRTC recording stopped!', 'success');
+                     
+                     // Transmit audio to Mini Omni 2 if connected
+                     await this.transmitAudioToMiniOmni2();
+                 }
+             }
 
             async saveRecording() {
                 if (this.audioChunks.length === 0 && !this.isWebRTC) {
@@ -971,17 +1085,293 @@
                 return window.btoa(binary);
             }
 
-            showMessage(message, type) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `message message-${type}`;
-                messageDiv.textContent = message;
-                
-                this.messageContainer.appendChild(messageDiv);
-                
-                setTimeout(() => {
-                    messageDiv.remove();
-                }, 5000);
-            }
+                         async transmitAudioToMiniOmni2() {
+                 try {
+                     // Prepare audio data
+                     let audioBlob;
+                     if (this.isWebRTC) {
+                         // For WebRTC, create a placeholder blob (in real implementation, you'd have actual audio data)
+                         audioBlob = new Blob(['webrtc_audio_data'], { type: 'audio/wav' });
+                     } else {
+                         // For MediaRecorder, use the recorded chunks
+                         if (this.audioChunks.length === 0) {
+                             this.showMessage('No audio data to transmit', 'error');
+                             return;
+                         }
+                         audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                     }
+                     
+                     // Convert to base64
+                     const arrayBuffer = await audioBlob.arrayBuffer();
+                     const base64Audio = this.arrayBufferToBase64(arrayBuffer);
+                     
+                     // Get current processing parameters
+                     const processingParams = {
+                         fps: parseInt(this.fpsSlider.value),
+                         batch_size: parseInt(this.batchSizeSlider.value)
+                     };
+                     
+                     // Prepare transmission data
+                     const transmissionData = {
+                         type: 'audio_processing_request',
+                         audio_data: base64Audio,
+                         audio_format: 'wav',
+                         sample_rate: 44100,
+                         channels: 1,
+                         duration: (Date.now() - this.startTime) / 1000,
+                         processing_parameters: processingParams,
+                         session_id: this.sessionId,
+                         timestamp: Date.now()
+                     };
+                     
+                     // Get Mini Omni 2 URL and extract host and port
+                     const miniOmniUrl = this.server1Url.value.trim();
+                     let miniOmniHost, miniOmniPort;
+                     
+                     if (miniOmniUrl.startsWith('ws://') || miniOmniUrl.startsWith('wss://')) {
+                         // Extract host and port from WebSocket URL
+                         const url = new URL(miniOmniUrl);
+                         miniOmniHost = url.hostname;
+                         miniOmniPort = url.port || (url.protocol === 'wss:' ? '443' : '80');
+                     } else {
+                         // Assume it's a direct host:port format
+                         const parts = miniOmniUrl.split(':');
+                         miniOmniHost = parts[0];
+                         miniOmniPort = parts[1] || '80';
+                     }
+                     
+                     // Determine protocol based on port
+                     const protocol = miniOmniPort === '443' ? 'https:' : 'http:';
+                     
+                     // Send to Mini Omni 2 via HTTP POST
+                     const response = await fetch(`${protocol}//${miniOmniHost}:${miniOmniPort}/process_audio_json`, {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json',
+                         },
+                         body: JSON.stringify(transmissionData)
+                     });
+                     
+                     if (response.ok) {
+                         const result = await response.json();
+                         this.showMessage('Audio transmitted to Mini Omni 2 for processing', 'success');
+                         
+                         // Handle response from Mini Omni 2
+                         if (result.status === 'processing') {
+                             this.showMessage(`Mini Omni 2: Processing audio (${result.progress || 0}%)`, 'info');
+                         } else if (result.status === 'complete') {
+                             this.showMessage('Mini Omni 2: Processing complete!', 'success');
+                         } else if (result.status === 'error') {
+                             this.showMessage(`Mini Omni 2 processing failed: ${result.error}`, 'error');
+                         }
+                     } else {
+                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                     }
+                     
+                 } catch (error) {
+                     console.error('Error transmitting audio to Mini Omni 2:', error);
+                     this.showMessage('Error transmitting audio to Mini Omni 2: ' + error.message, 'error');
+                 }
+             }
+             
+             showMessage(message, type) {
+                 const messageDiv = document.createElement('div');
+                 messageDiv.className = `message message-${type}`;
+                 messageDiv.textContent = message;
+                 
+                 this.messageContainer.appendChild(messageDiv);
+                 
+                 setTimeout(() => {
+                     messageDiv.remove();
+                 }, 5000);
+             }
+
+                         async connectToServer(serverNumber) {
+                 const url = serverNumber === 1 ? this.server1Url.value : this.server2Url.value;
+                 const serverName = serverNumber === 1 ? 'Mini Omni 2' : 'Musetalk';
+                 
+                 if (!url) {
+                     this.showMessage(`Please enter a URL for ${serverName}`, 'error');
+                     return;
+                 }
+
+                 try {
+                     // Validate URL format
+                     let wsUrl = url.trim();
+                     
+                     // If no protocol specified, default to ws://
+                     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+                         wsUrl = 'ws://' + wsUrl;
+                     }
+                     
+                     // Basic URL validation
+                     try {
+                         new URL(wsUrl);
+                     } catch (e) {
+                         this.showMessage(`Invalid URL format for ${serverName}. Please enter a valid WebSocket URL`, 'error');
+                         return;
+                     }
+
+                     const button = serverNumber === 1 ? this.connectServer1Btn : this.connectServer2Btn;
+                     button.textContent = 'Connecting...';
+                     button.disabled = true;
+
+                     // Create actual WebSocket connection
+                     const serverWebSocket = new WebSocket(wsUrl);
+                     
+                                           // Set connection timeout
+                      const connectionTimeout = setTimeout(() => {
+                          if (serverWebSocket.readyState === WebSocket.CONNECTING) {
+                              serverWebSocket.close();
+                              this.showMessage(`Connection timeout to ${serverName} (${wsUrl})`, 'error');
+                              button.textContent = serverNumber === 1 ? 'Connect Mini Omni 2' : 'Connect Musetalk';
+                              button.disabled = false;
+                          }
+                      }, 5000); // 5 second timeout
+
+                                           serverWebSocket.onopen = () => {
+                          clearTimeout(connectionTimeout);
+                          this.showMessage(`Successfully connected to ${serverName} (${wsUrl})`, 'success');
+                         
+                         button.textContent = 'Connected';
+                         button.style.background = '#28a745';
+                         
+                         // Store the WebSocket connection
+                         if (serverNumber === 1) {
+                             this.miniOmniWebSocket = serverWebSocket;
+                         } else {
+                             this.musetalkWebSocket = serverWebSocket;
+                         }
+                         
+                         // Send initial message
+                         serverWebSocket.send(JSON.stringify({
+                             type: 'init',
+                             client: 'WebRTC Audio Recorder',
+                             timestamp: Date.now()
+                         }));
+                     };
+                     
+                     serverWebSocket.onmessage = (event) => {
+                         try {
+                             const data = JSON.parse(event.data);
+                             this.handleServerMessage(data, serverName);
+                         } catch (error) {
+                             console.log(`Raw message from ${serverName}:`, event.data);
+                         }
+                     };
+                     
+                     serverWebSocket.onclose = (event) => {
+                         clearTimeout(connectionTimeout);
+                         if (event.code !== 1000) { // Not a normal closure
+                             this.showMessage(`Disconnected from ${serverName}: ${event.reason || 'Connection closed'}`, 'info');
+                         }
+                         
+                         button.textContent = serverNumber === 1 ? 'Connect Mini Omni 2' : 'Connect Musetalk';
+                         button.disabled = false;
+                         button.style.background = '';
+                         
+                         // Clear the stored WebSocket
+                         if (serverNumber === 1) {
+                             this.miniOmniWebSocket = null;
+                         } else {
+                             this.musetalkWebSocket = null;
+                         }
+                     };
+                     
+                                           serverWebSocket.onerror = (error) => {
+                          clearTimeout(connectionTimeout);
+                          console.error(`WebSocket error for ${serverName}:`, error);
+                          this.showMessage(`Failed to connect to ${serverName} (${wsUrl})`, 'error');
+                         
+                         button.textContent = serverNumber === 1 ? 'Connect Mini Omni 2' : 'Connect Musetalk';
+                         button.disabled = false;
+                     };
+
+                 } catch (error) {
+                     console.error(`Error connecting to ${serverName}:`, error);
+                     this.showMessage(`Failed to connect to ${serverName}: ${error.message}`, 'error');
+                     
+                     const button = serverNumber === 1 ? this.connectServer1Btn : this.connectServer2Btn;
+                     button.textContent = serverNumber === 1 ? 'Connect Mini Omni 2' : 'Connect Musetalk';
+                     button.disabled = false;
+                 }
+             }
+
+                           handleServerMessage(data, serverName) {
+                  console.log(`Message from ${serverName}:`, data);
+                  
+                  // Handle different message types from the servers
+                  switch (data.type) {
+                      case 'init_ack':
+                          this.showMessage(`${serverName} acknowledged connection`, 'success');
+                          break;
+                      case 'status':
+                          this.showMessage(`${serverName} status: ${data.message}`, 'info');
+                          break;
+                      case 'error':
+                          this.showMessage(`${serverName} error: ${data.message}`, 'error');
+                          break;
+                      case 'audio_processing_response':
+                          if (serverName === 'Mini Omni 2') {
+                              this.handleMiniOmni2ProcessingResponse(data);
+                          }
+                          break;
+                      case 'processing_complete':
+                          if (serverName === 'Mini Omni 2') {
+                              this.showMessage(`Mini Omni 2 processing complete: ${data.message || 'Audio processed successfully'}`, 'success');
+                          }
+                          break;
+                      case 'processing_error':
+                          if (serverName === 'Mini Omni 2') {
+                              this.showMessage(`Mini Omni 2 processing error: ${data.message}`, 'error');
+                          }
+                          break;
+                      default:
+                          console.log(`Unknown message type from ${serverName}:`, data);
+                  }
+              }
+              
+              handleMiniOmni2ProcessingResponse(data) {
+                  // Handle processing response from Mini Omni 2
+                  if (data.status === 'processing') {
+                      this.showMessage(`Mini Omni 2: Processing audio (${data.progress || 0}%)`, 'info');
+                  } else if (data.status === 'complete') {
+                      this.showMessage(`Mini Omni 2: Processing complete!`, 'success');
+                      
+                      // If there's processed audio data, you could handle it here
+                      if (data.processed_audio) {
+                          console.log('Received processed audio from Mini Omni 2');
+                          // Handle the processed audio data as needed
+                      }
+                  } else if (data.status === 'error') {
+                      this.showMessage(`Mini Omni 2 processing failed: ${data.error}`, 'error');
+                  }
+              }
+
+                         disconnectAllServers() {
+                 // Close Mini Omni 2 WebSocket connection
+                 if (this.miniOmniWebSocket) {
+                     this.miniOmniWebSocket.close(1000, 'User disconnected');
+                     this.miniOmniWebSocket = null;
+                 }
+                 
+                 // Close Musetalk WebSocket connection
+                 if (this.musetalkWebSocket) {
+                     this.musetalkWebSocket.close(1000, 'User disconnected');
+                     this.musetalkWebSocket = null;
+                 }
+                 
+                 // Reset all server connection buttons
+                 this.connectServer1Btn.textContent = 'Connect Mini Omni 2';
+                 this.connectServer1Btn.disabled = false;
+                 this.connectServer1Btn.style.background = '';
+
+                 this.connectServer2Btn.textContent = 'Connect Musetalk';
+                 this.connectServer2Btn.disabled = false;
+                 this.connectServer2Btn.style.background = '';
+
+                 this.showMessage('Disconnected from all servers', 'info');
+             }
         }
 
         // Initialize the audio recorder when the page loads
